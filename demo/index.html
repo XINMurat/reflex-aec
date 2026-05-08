@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>reflex-aec — Live Demo</title>
+  <style>
+    :root {
+      --bg:      #0d0f14;
+      --surface: #161923;
+      --border:  #252a35;
+      --accent:  #3b82f6;
+      --accent2: #22d3ee;
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --yellow:  #eab308;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --font:    'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 0.4rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 680px;
+      margin-bottom: 1.25rem;
+    }
+
+    .card h2 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    /* Status row */
+    .status-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .dot.green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot.red    { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+    .dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
+    button {
+      padding: 0.55rem 1.2rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    button.primary:hover:not(:disabled) {
+      background: #2563eb;
+      color: #fff;
+    }
+
+    button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    /* Canvas */
+    canvas {
+      width: 100%;
+      height: 100px;
+      border-radius: 6px;
+      background: var(--bg);
+      display: block;
+      margin-top: 0.75rem;
+    }
+
+    .canvas-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+
+    /* Params */
+    .param-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.85rem;
+    }
+
+    .param-item label {
+      display: block;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 0.3rem;
+    }
+
+    .param-item input[type=range] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .param-item .val {
+      font-size: 0.72rem;
+      color: var(--accent2);
+      text-align: right;
+    }
+
+    /* Log */
+    #log {
+      font-size: 0.73rem;
+      color: var(--muted);
+      max-height: 120px;
+      overflow-y: auto;
+      line-height: 1.7;
+    }
+
+    #log .entry { display: flex; gap: 0.5rem; }
+    #log .ts    { color: var(--border); flex-shrink: 0; }
+    #log .ok    { color: var(--green); }
+    #log .warn  { color: var(--yellow); }
+    #log .err   { color: var(--red); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>reflex-aec</h1>
+  <p>Frequency-domain acoustic echo cancellation · Zero dependencies · Safari iOS ready</p>
+</header>
+
+<!-- Status -->
+<div class="card">
+  <h2>Status</h2>
+  <div class="status-row">
+    <div class="badge"><div class="dot" id="dot-aec"></div> AEC</div>
+    <div class="badge"><div class="dot" id="dot-mic"></div> Microphone</div>
+    <div class="badge"><div class="dot" id="dot-bot"></div> Bot speaking</div>
+    <div class="badge"><div class="dot" id="dot-guard"></div> BG guard</div>
+  </div>
+  <div class="btn-row">
+    <button class="primary" id="btn-init">Initialize AEC</button>
+    <button id="btn-play" disabled>▶ Play Test Tone (Bot Simulation)</button>
+    <button id="btn-reset" disabled>⟳ Reset H(f)</button>
+  </div>
+</div>
+
+<!-- Waveforms -->
+<div class="card">
+  <h2>Waveforms</h2>
+  <div class="canvas-label">Microphone input (raw)</div>
+  <canvas id="cv-mic"></canvas>
+  <div class="canvas-label" style="margin-top:0.75rem">AEC output (cleaned)</div>
+  <canvas id="cv-out"></canvas>
+</div>
+
+<!-- Parameters -->
+<div class="card">
+  <h2>Parameters (live)</h2>
+  <div class="param-grid">
+    <div class="param-item">
+      <label>alpha — H(f) smoothing</label>
+      <input type="range" id="p-alpha" min="0.5" max="0.99" step="0.01" value="0.92">
+      <div class="val" id="v-alpha">0.92</div>
+    </div>
+    <div class="param-item">
+      <label>beta — spectral floor</label>
+      <input type="range" id="p-beta" min="0.005" max="0.1" step="0.005" value="0.02">
+      <div class="val" id="v-beta">0.02</div>
+    </div>
+    <div class="param-item">
+      <label>mu — NLMS step size</label>
+      <input type="range" id="p-mu" min="0.01" max="0.3" step="0.01" value="0.1">
+      <div class="val" id="v-mu">0.10</div>
+    </div>
+    <div class="param-item">
+      <label>ratioMax — BG guard</label>
+      <input type="range" id="p-ratioMax" min="2" max="20" step="0.5" value="5">
+      <div class="val" id="v-ratioMax">5.0</div>
+    </div>
+  </div>
+</div>
+
+<!-- Log -->
+<div class="card">
+  <h2>Event Log</h2>
+  <div id="log"></div>
+</div>
+
+<script>
+// ── Logging ────────────────────────────────────────────────────────────────
+function log(msg, type = '') {
+  const el = document.getElementById('log');
+  const ts = new Date().toTimeString().slice(0, 8);
+  el.innerHTML += `<div class="entry"><span class="ts">${ts}</span><span class="${type}">${msg}</span></div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Dot helpers ────────────────────────────────────────────────────────────
+function dot(id, color) {
+  const d = document.getElementById('dot-' + id);
+  d.className = 'dot' + (color ? ' ' + color : '');
+}
+
+// ── Canvas waveform ────────────────────────────────────────────────────────
+function drawWave(canvas, buffer, color = '#3b82f6') {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  const step = Math.ceil(buffer.length / W);
+  for (let x = 0; x < W; x++) {
+    const i = x * step;
+    const y = (1 - (buffer[i] ?? 0)) * H / 2;
+    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+}
+
+// HiDPI canvas sizing
+function sizeCanvas(cv) {
+  const r = window.devicePixelRatio || 1;
+  cv.width  = cv.offsetWidth * r;
+  cv.height = 100 * r;
+}
+
+// ── Synthetic test tone (bot simulation) ──────────────────────────────────
+// 300Hz fundamental + harmonics — voice-like spectrum
+function makeBotTone(ctx, durationSec = 2.0) {
+  const SR = ctx.sampleRate;
+  const len = Math.floor(SR * durationSec);
+  const buf = ctx.createBuffer(1, len, SR);
+  const ch  = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) {
+    const t = i / SR;
+    ch[i] = 0.35 * Math.sin(2 * Math.PI * 300 * t)
+           + 0.20 * Math.sin(2 * Math.PI * 600 * t)
+           + 0.12 * Math.sin(2 * Math.PI * 900 * t)
+           + 0.07 * Math.sin(2 * Math.PI * 1200 * t);
+  }
+  return buf;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────
+let aec = null;
+
+document.getElementById('btn-init').addEventListener('click', async () => {
+  try {
+    log('Initializing AudioContext + AEC worklet…');
+    // Dynamic import — works both from file:// and served
+    const { default: ChatbotAEC } = await import('../src/aec-main.js');
+    aec = new ChatbotAEC();
+    await aec.init();
+
+    // Route AEC output to analyser for waveform display
+    const analyserIn  = aec.audioCtx.createAnalyser();
+    const analyserOut = aec.audioCtx.createAnalyser();
+    analyserIn.fftSize = analyserOut.fftSize = 1024;
+
+    aec.micSource.connect(analyserIn);
+    aec.aecNode.connect(analyserOut);
+
+    const cvMic = document.getElementById('cv-mic');
+    const cvOut = document.getElementById('cv-out');
+    sizeCanvas(cvMic); sizeCanvas(cvOut);
+
+    const bufIn  = new Float32Array(analyserIn.fftSize);
+    const bufOut = new Float32Array(analyserOut.fftSize);
+
+    function animate() {
+      analyserIn.getFloatTimeDomainData(bufIn);
+      analyserOut.getFloatTimeDomainData(bufOut);
+      drawWave(cvMic, bufIn,  '#64748b');
+      drawWave(cvOut, bufOut, '#3b82f6');
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    dot('aec', 'green');
+    dot('mic', 'green');
+    log('AEC ready. Sample rate: ' + aec.audioCtx.sampleRate + ' Hz', 'ok');
+
+    document.getElementById('btn-init').disabled = true;
+    document.getElementById('btn-play').disabled = false;
+    document.getElementById('btn-reset').disabled = false;
+
+  } catch (e) {
+    log('Init failed: ' + e.message, 'err');
+    dot('aec', 'red');
+  }
+});
+
+document.getElementById('btn-play').addEventListener('click', async () => {
+  if (!aec) return;
+  log('Generating test tone (bot simulation)…');
+  dot('bot', 'yellow');
+
+  // Create synthetic audio and convert to ArrayBuffer
+  const toneBuf = makeBotTone(aec.audioCtx, 2.0);
+  const offline = new OfflineAudioContext(1, toneBuf.length, aec.audioCtx.sampleRate);
+  const src = offline.createBufferSource();
+  src.buffer = toneBuf;
+  src.connect(offline.destination);
+  src.start();
+  const rendered = await offline.startRendering();
+
+  // Encode to WAV for playBotAudio
+  const wav = bufferToWav(rendered);
+  log('Playing 2s test tone through AEC reference pipeline…', 'ok');
+
+  await aec.playBotAudio(wav);
+
+  dot('bot', '');
+  log('Bot audio finished. H(f) + NLMS reset.', 'ok');
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (!aec?.aecNode) return;
+  aec.aecNode.port.postMessage({ type: 'reset' });
+  log('Manual reset sent to processor.', 'warn');
+});
+
+// ── Param sliders ─────────────────────────────────────────────────────────
+['alpha', 'beta', 'mu', 'ratioMax'].forEach(p => {
+  const slider = document.getElementById('p-' + p);
+  const valEl  = document.getElementById('v-' + p);
+  slider.addEventListener('input', () => {
+    const v = parseFloat(slider.value);
+    valEl.textContent = v.toFixed(2);
+    if (aec) aec.setParams({ [p]: v });
+  });
+});
+
+// ── WAV encoder (minimal, for demo) ──────────────────────────────────────
+function bufferToWav(audioBuffer) {
+  const ch   = audioBuffer.getChannelData(0);
+  const SR   = audioBuffer.sampleRate;
+  const len  = ch.length;
+  const ab   = new ArrayBuffer(44 + len * 2);
+  const view = new DataView(ab);
+  const write = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+
+  write(0, 'RIFF');
+  view.setUint32(4, 36 + len * 2, true);
+  write(8, 'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);   // PCM
+  view.setUint16(22, 1, true);   // mono
+  view.setUint32(24, SR, true);
+  view.setUint32(28, SR * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, 'data');
+  view.setUint32(40, len * 2, true);
+
+  for (let i = 0; i < len; i++) {
+    view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, ch[i])) * 0x7fff, true);
+  }
+  return ab;
+}
+</script>
+</body>
+</html>

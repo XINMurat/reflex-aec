@@ -1,0 +1,46 @@
+{
+  "name": "reflex-aec",
+  "version": "1.0.0",
+  "description": "Zero-dependency frequency-domain acoustic echo cancellation for browser voice applications. Cascaded FDAF + NLMS pipeline with Safari iOS support.",
+  "main": "src/aec-main.js",
+  "type": "module",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node test/aec.test.js",
+    "serve": "npx serve ."
+  },
+  "keywords": [
+    "aec",
+    "echo-cancellation",
+    "acoustic-echo-cancellation",
+    "webrtc",
+    "audio",
+    "audioworklet",
+    "safari",
+    "ios",
+    "voice",
+    "chatbot",
+    "nlms",
+    "fdaf",
+    "dsp",
+    "zero-dependency"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XINMurat/reflex-aec.git"
+  },
+  "bugs": {
+    "url": "https://github.com/XINMurat/reflex-aec/issues"
+  },
+  "homepage": "https://github.com/XINMurat/reflex-aec#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {}
+}
