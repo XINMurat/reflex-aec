@@ -7,3 +7,4 @@ dist/
 coverage/
 .claude/
 TASK_*.md
+GITHUB_RELEASE_STEPS.md

@@ -50,6 +50,9 @@ class FFT {
   }
 }
 
+// v2.1: updateWeights parametresi eklendi.
+// updateWeights=false: filtrele ama katsayıları güncelleme.
+// Processor'da OLA geçmişindeki sample'lar için kullanılır — ses kısılmasını önler.
 class NLMSFilter {
   constructor(order = 64, mu = 0.1) {
     this.order = order; this.MU = mu; this.EPS = 1e-6;
@@ -57,18 +60,20 @@ class NLMSFilter {
     this.xBuf = new Float32Array(order);
     this.xIdx = 0;
   }
-  process(micSample, refSample) {
+  process(micSample, refSample, updateWeights = true) {
     this.xBuf[this.xIdx] = refSample;
     this.xIdx = (this.xIdx + 1) % this.order;
     let echo = 0;
     for (let i = 0; i < this.order; i++)
       echo += this.w[i] * this.xBuf[(this.xIdx + i) % this.order];
     const err = micSample - echo;
-    let xPow = this.EPS;
-    for (let i = 0; i < this.order; i++) xPow += this.xBuf[i] ** 2;
-    const step = this.MU / xPow;
-    for (let i = 0; i < this.order; i++)
-      this.w[i] += step * err * this.xBuf[(this.xIdx + i) % this.order];
+    if (updateWeights) {
+      let xPow = this.EPS;
+      for (let i = 0; i < this.order; i++) xPow += this.xBuf[i] ** 2;
+      const step = this.MU / xPow;
+      for (let i = 0; i < this.order; i++)
+        this.w[i] += step * err * this.xBuf[(this.xIdx + i) % this.order];
+    }
     return err;
   }
   reset() { this.w.fill(0); this.xBuf.fill(0); this.xIdx = 0; }
@@ -209,7 +214,7 @@ test('Kullanıcı sesi korunur — eko giderilirken sinyal kaybolmaz', () => {
   assert(ratio > 0.6, `Kullanıcı sesi çok zayıfladı: güç oranı=${ratio.toFixed(3)} (beklenen > 0.6)`);
 });
 
-test('Reset — sıfırlama sonrası yeniden öğrenme', () => {
+test('Reset — sıfırlama sonrası katsayılar sıfır', () => {
   const filter = new NLMSFilter(32, 0.3);
   const ref = new Float32Array(300).map(() => Math.random() - 0.5);
   // 300 sample öğren
@@ -219,6 +224,28 @@ test('Reset — sıfırlama sonrası yeniden öğrenme', () => {
   // Sıfırlama sonrası katsayılar sıfır olmalı
   const wSum = filter.w.reduce((s, v) => s + Math.abs(v), 0);
   assertNear(wSum, 0, 1e-9, `Reset sonrası katsayı toplamı=${wSum}`);
+});
+
+test('updateWeights=false — katsayılar değişmemeli', () => {
+  // v2.1 özelliği: OLA geçmişindeki eski sample'lar için katsayı güncellenmez.
+  // Bu sayede kullanıcı sesinin kısılması önlenir.
+  const filter = new NLMSFilter(16, 0.3);
+  const ref = new Float32Array(50).map(() => Math.random() - 0.5);
+
+  // Önce birkaç iterasyon öğren
+  for (let n = 2; n < 50; n++) filter.process(0.4 * ref[n - 2], ref[n]);
+
+  // Katsayıları kaydet
+  const wBefore = new Float32Array(filter.w);
+
+  // updateWeights=false ile çalıştır
+  for (let n = 2; n < 50; n++) filter.process(0.4 * ref[n - 2], ref[n], false);
+
+  // Katsayılar değişmemiş olmalı
+  for (let i = 0; i < filter.order; i++) {
+    assertNear(filter.w[i], wBefore[i], 1e-9,
+      `Katsayı değişti: w[${i}]=${filter.w[i].toFixed(8)} vs ${wBefore[i].toFixed(8)}`);
+  }
 });
 
 test('NLMS — sıfır güç referansında kararlı', () => {
@@ -231,7 +258,7 @@ test('NLMS — sıfır güç referansında kararlı', () => {
 });
 
 // ── Frekans Domeninde Eko Çıkarma Entegrasyon Testi ───────────────────────
-console.log('\nFDAS Integration');
+console.log('\nFDAF Integration');
 
 test('H(f) tahmini — bilinen transfer fonksiyonu ile yakınsama', () => {
   // Bilinen H: tüm frekanslarda gain=0.5, gecikme=0
@@ -276,8 +303,9 @@ test('H(f) tahmini — bilinen transfer fonksiyonu ile yakınsama', () => {
 console.log('\nReference Merge');
 
 test('Two sources merged — combined power equals sum of individual powers', () => {
-  // Use exact FFT bin frequencies so the two signals are perfectly orthogonal.
-  // Bin spacing = SR/N = 48000/256 = 187.5 Hz → bin 2 = 375 Hz, bin 5 = 937.5 Hz
+  // Tam bin frekansları kullan: ortogonallik garantisi için.
+  // Bin aralığı = SR/N = 48000/256 = 187.5 Hz
+  // bin 2 = 375 Hz,  bin 5 = 937.5 Hz
   const N  = 256;
   const SR = 48000;
   const f1 = 2 * SR / N;  // exact bin 2
