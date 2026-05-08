@@ -4,6 +4,18 @@
 
 Prevents a voice chatbot from hearing its own audio output — without machine learning models, without external libraries, and with full Safari iOS support.
 
+[![npm version](https://img.shields.io/npm/v/reflex-aec)](https://www.npmjs.com/package/reflex-aec)
+[![license](https://img.shields.io/npm/l/reflex-aec)](LICENSE)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/reflex-aec)](https://bundlephobia.com/package/reflex-aec)
+
+---
+
+## Live Demo
+
+**[xinmurat.github.io/reflex-aec/demo/](https://xinmurat.github.io/reflex-aec/demo/)**
+
+The demo lets you play a test tone through your speakers and see — in real time — the echo being cancelled. A scrolling dB history graph shows mic input (with echo) vs AEC output (cleaned). Toggle the bypass button to A/B compare.
+
 ---
 
 ## Why reflex-aec?
@@ -46,6 +58,8 @@ Microphone input (user voice + bot echo)
       Clean user voice
 ```
 
+**Reference signal routing:** The bot audio is routed directly through the AudioGraph (`AudioBufferSourceNode → AudioWorkletNode input 1`), providing sample-accurate synchronization with no timing jitter.
+
 **Background audio guard:** If another app is playing audio (e.g. Spotify), the power ratio detector prevents `H(f)` from learning corrupted data.
 
 ---
@@ -65,14 +79,18 @@ Microphone input (user voice + bot echo)
 
 ## Installation
 
-### Via CDN (no build step)
-```html
-<script src="https://cdn.jsdelivr.net/gh/XINMurat/reflex-aec/src/aec-main.js"></script>
-```
-
 ### Via npm
+
 ```bash
 npm install reflex-aec
+```
+
+### Via CDN (no build step)
+
+```html
+<script type="module">
+  import ChatbotAEC from 'https://cdn.jsdelivr.net/npm/reflex-aec@1.0.1/src/aec-main.js';
+</script>
 ```
 
 ---
@@ -113,16 +131,24 @@ Creates a new AEC instance.
 Initializes AudioContext and AudioWorklet. Must be called inside a user gesture event handler.
 
 ### `await aec.playBotAudio(audioData: ArrayBuffer): Promise<void>`
-Plays bot audio through the speaker while simultaneously sending the reference signal to the AEC processor. Resolves when playback ends and resets the filter state.
+Plays bot audio through the speaker while simultaneously routing the reference signal to the AEC processor via the AudioGraph (sample-accurate). Resolves when playback ends and resets the filter state.
+
+### `aec.bypass(value: boolean)`
+Toggles bypass mode. When `true`, mic signal passes through unprocessed. Useful for A/B comparison during testing.
+
+```javascript
+aec.bypass(true);   // raw mic — echo audible
+aec.bypass(false);  // AEC on — echo cancelled
+```
 
 ### `aec.setParams(params: object)`
 Updates processing parameters at runtime.
 
 | Parameter | Default | Range | Description |
 |---|---|---|---|
-| `alpha` | `0.92` | 0.5–0.99 | H(f) EMA smoothing. Higher = slower adaptation, more stable |
+| `alpha` | `0.85` | 0.5–0.99 | H(f) EMA smoothing. Higher = slower adaptation, more stable |
 | `beta` | `0.02` | 0.01–0.1 | Spectral floor ratio. Lower = more aggressive subtraction |
-| `mu` | `0.10` | 0.01–0.3 | NLMS step size. Higher = faster convergence, less stable |
+| `mu` | `0.05` | 0.01–0.3 | NLMS step size. Higher = faster convergence, less stable |
 | `ratioMax` | `5.0` | 2–20 | Background noise guard upper threshold |
 | `ratioMin` | `0.01` | — | Background noise guard lower threshold |
 | `nlmsOrder` | `64` | 32–256 | NLMS filter length. Use 128 for Bluetooth speakers |
@@ -136,17 +162,17 @@ Disconnects nodes and closes AudioContext.
 
 **Quiet environment (home, private office):**
 ```javascript
-aec.setParams({ alpha: 0.92, beta: 0.02, mu: 0.10, ratioMax: 5.0 })
+aec.setParams({ alpha: 0.85, beta: 0.02, mu: 0.05, ratioMax: 5.0 })
 ```
 
 **Noisy environment (open office, café):**
 ```javascript
-aec.setParams({ alpha: 0.88, beta: 0.04, mu: 0.08, ratioMax: 8.0 })
+aec.setParams({ alpha: 0.80, beta: 0.04, mu: 0.04, ratioMax: 8.0 })
 ```
 
 **Bluetooth speaker (higher latency):**
 ```javascript
-aec.setParams({ nlmsOrder: 128, mu: 0.05 })
+aec.setParams({ nlmsOrder: 128, mu: 0.03 })
 ```
 
 ---
@@ -167,6 +193,10 @@ H(f) = G · e^(-j2πfτ)
 
 Since the reference signal is the exact digital copy of what the speaker plays, `H(f)` converges in a few frames — unlike room acoustics AEC which may take seconds.
 
+### Why route reference via AudioGraph?
+
+The reference signal is connected as a second input to the AudioWorkletNode (`inputs[1]`). This gives **sample-accurate synchronization** — both mic and reference are delivered to the same `process()` callback in the same audio thread tick, with no `setTimeout` jitter.
+
 ### Why NLMS as a second stage?
 
 FDAF assumes a linear speaker model. Real speakers introduce nonlinear distortion, especially at high volumes. NLMS in the time domain handles this residual without requiring the full complexity of nonlinear system identification.
@@ -181,7 +211,7 @@ The Constant Overlap-Add (COLA) condition with Hann windows at 75% overlap guara
 
 | Limitation | Impact | Workaround |
 |---|---|---|
-| Reference timing accuracy | ±2.7ms sync error | Acceptable for voice; add BT delay offset for Bluetooth |
+| Acoustic path delay | Speaker nonlinearity adds delay not in digital reference | NLMS stage compensates up to ~1.3ms; use `nlmsOrder: 128` for Bluetooth |
 | Speaker nonlinearity | Residual echo at high volumes | NLMS stage reduces this significantly |
 | Background audio (non-iOS) | H(f) may learn incorrect model | Background guard prevents this; restart H on detection |
 | Safari iOS exclusive mic mode | Other apps ducked automatically | Actually beneficial — less interference |
@@ -190,7 +220,7 @@ The Constant Overlap-Add (COLA) condition with Hann windows at 75% overlap guara
 
 ## License
 
-MIT © 2025
+MIT © 2026
 
 ---
 
