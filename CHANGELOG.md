@@ -6,6 +6,14 @@ Format: [Semantic Versioning](https://semver.org)
 
 ---
 
+## [1.1.1] — 2026-05-08
+
+### Changes
+
+- README: CDN link updated to `@1.1.0`, `init()` `requestSystemAudio` option documented
+
+---
+
 ## [1.1.0] — 2026-05-08
 
 ### New features
