@@ -6,7 +6,7 @@ Prevents a voice chatbot from hearing its own audio output — without machine l
 
 [![npm version](https://img.shields.io/npm/v/reflex-aec)](https://www.npmjs.com/package/reflex-aec)
 [![license](https://img.shields.io/npm/l/reflex-aec)](LICENSE)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/reflex-aec)](https://bundlephobia.com/package/reflex-aec)
+[![bundle size](https://img.shields.io/badge/bundle-11.7kB-blue)](https://www.npmjs.com/package/reflex-aec)
 
 ---
 
