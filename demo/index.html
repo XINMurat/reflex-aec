@@ -238,8 +238,40 @@
       text-align: right;
     }
 
-    /* Bypass button active state */
-    button.bypass-active {
+    /* A/B Compare row */
+    .ab-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.85rem;
+      padding-top: 0.85rem;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    .ab-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .ab-hint {
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+
+    #btn-bypass {
+      border-color: var(--green);
+      color: var(--green);
+      min-width: 120px;
+    }
+
+    #btn-bypass:disabled {
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    #btn-bypass.bypass-active {
       border-color: var(--yellow);
       color: var(--yellow);
     }
@@ -278,15 +310,17 @@
   </div>
   <div class="btn-row">
     <button class="primary" id="btn-init">Initialize AEC</button>
-    <button id="btn-play" disabled>▶ Play Test Tone (Bot Simulation)</button>
-    <button id="btn-bypass" disabled>AEC: ON</button>
+    <button id="btn-play" disabled>▶ Play Test Tone (5s)</button>
     <button id="btn-reset" disabled>⟳ Reset H(f)</button>
   </div>
+  <div class="ab-row">
+    <span class="ab-label">A/B Compare:</span>
+    <button id="btn-bypass" disabled>● AEC ON</button>
+    <span class="ab-hint">Click to bypass — hear the raw echo, then click again to restore AEC</span>
+  </div>
   <p style="font-size:0.72rem;color:var(--muted);margin-top:0.75rem">
-    Test: Click "Play Test Tone" — the mic will capture the echo.
-    Watch <strong style="color:var(--text)">Input level</strong> rise and
-    <strong style="color:var(--text)">AEC output</strong> stay suppressed.
-    Toggle <strong style="color:var(--text)">AEC: ON/OFF</strong> to A/B compare.
+    How to test: turn up your speakers, click <strong style="color:var(--text)">Play Test Tone</strong>.
+    The mic picks up the echo — watch the red line spike in the history graph while the blue line stays low.
   </p>
 </div>
 
@@ -565,7 +599,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
   dot('bot', 'yellow');
 
   // Create synthetic audio and convert to ArrayBuffer
-  const toneBuf = makeBotTone(aec.audioCtx, 2.0);
+  const toneBuf = makeBotTone(aec.audioCtx, 5.0);
   const offline = new OfflineAudioContext(1, toneBuf.length, aec.audioCtx.sampleRate);
   const src = offline.createBufferSource();
   src.buffer = toneBuf;
@@ -588,7 +622,7 @@ document.getElementById('btn-bypass').addEventListener('click', () => {
   const btn = document.getElementById('btn-bypass');
   const active = btn.classList.toggle('bypass-active');
   aec.bypass(active);
-  btn.textContent = active ? 'AEC: OFF (bypass)' : 'AEC: ON';
+  btn.textContent = active ? '○ AEC OFF (bypassed)' : '● AEC ON';
   log(active ? 'Bypass ON — raw mic passthrough' : 'AEC ON — echo cancellation active', 'warn');
 });
 

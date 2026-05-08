@@ -48,9 +48,9 @@ class ChatbotAEC {
 
   // ── Bot sesini çal ve referansı AudioGraph üzerinden ilet ─────────────────
   async playBotAudio(audioData) {
-    if (!this.isReady) throw new Error('init() çağrılmadı');
+    if (!this.isReady) throw new Error('init() has not been called');
     if (this._botSpeaking) {
-      console.warn('Bot zaten konuşuyor, yeni ses yoksayıldı');
+      console.warn('Bot is already speaking — new audio ignored');
       return;
     }
 
@@ -58,8 +58,8 @@ class ChatbotAEC {
 
     if (audioBuffer.sampleRate !== this.audioCtx.sampleRate) {
       console.warn(
-        `Sample rate uyuşmazlığı: bot=${audioBuffer.sampleRate}Hz, ` +
-        `ctx=${this.audioCtx.sampleRate}Hz — decodeAudioData yeniden örnekledi`
+        `Sample rate mismatch: bot=${audioBuffer.sampleRate}Hz, ` +
+        `ctx=${this.audioCtx.sampleRate}Hz — decodeAudioData resampled`
       );
     }
 
