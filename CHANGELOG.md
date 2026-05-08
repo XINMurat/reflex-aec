@@ -6,6 +6,22 @@ Format: [Semantic Versioning](https://semver.org)
 
 ---
 
+## [1.1.0] — 2026-05-08
+
+### New features
+
+- **System audio loopback** via `getDisplayMedia` — captures all speaker output as AEC reference (desktop Chrome/Edge)
+- `enableSystemAudio()` — user-gesture-triggered system audio capture
+- `getSystemAudioStatus()` — query support and active state
+- Reference graph: `BotGainNode + SysGainNode → AEC inputs[1]`, both summed by WebAudio
+
+### Changes
+
+- `init()` now accepts `{ requestSystemAudio }` option
+- `dispose()` now stops system audio tracks
+
+---
+
 ## [1.0.2] — 2026-05-08
 
 ### Changes

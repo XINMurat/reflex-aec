@@ -306,11 +306,13 @@
     <div class="badge"><div class="dot" id="dot-aec"></div> AEC</div>
     <div class="badge"><div class="dot" id="dot-mic"></div> Microphone</div>
     <div class="badge"><div class="dot" id="dot-bot"></div> Bot speaking</div>
+    <div class="badge"><div class="dot" id="dot-sys"></div> System audio ref</div>
     <div class="badge"><div class="dot" id="dot-guard"></div> BG guard</div>
   </div>
   <div class="btn-row">
     <button class="primary" id="btn-init">Initialize AEC</button>
     <button id="btn-play" disabled>▶ Play Test Tone (5s)</button>
+    <button id="btn-sys-audio" disabled>🎵 Enable System Audio Reference</button>
     <button id="btn-reset" disabled>⟳ Reset H(f)</button>
   </div>
   <div class="ab-row">
@@ -582,10 +584,11 @@ document.getElementById('btn-init').addEventListener('click', async () => {
     dot('mic', 'green');
     log('AEC ready. Sample rate: ' + aec.audioCtx.sampleRate + ' Hz', 'ok');
 
-    document.getElementById('btn-init').disabled   = true;
-    document.getElementById('btn-play').disabled   = false;
-    document.getElementById('btn-bypass').disabled = false;
-    document.getElementById('btn-reset').disabled  = false;
+    document.getElementById('btn-init').disabled      = true;
+    document.getElementById('btn-play').disabled      = false;
+    document.getElementById('btn-sys-audio').disabled = false;
+    document.getElementById('btn-bypass').disabled    = false;
+    document.getElementById('btn-reset').disabled     = false;
 
   } catch (e) {
     log('Init failed: ' + e.message, 'err');
@@ -615,6 +618,26 @@ document.getElementById('btn-play').addEventListener('click', async () => {
 
   dot('bot', '');
   log('Bot audio finished. H(f) + NLMS reset.', 'ok');
+});
+
+document.getElementById('btn-sys-audio').addEventListener('click', async () => {
+  if (!aec) return;
+  const btn = document.getElementById('btn-sys-audio');
+  btn.disabled = true;
+  btn.textContent = '⏳ Requesting…';
+  log('Requesting system audio capture via getDisplayMedia…');
+
+  const result = await aec.enableSystemAudio();
+  if (result.active) {
+    dot('sys', 'green');
+    btn.textContent = '✓ System Audio Active';
+    log('System audio loopback active — all speaker output used as reference', 'ok');
+  } else {
+    btn.disabled = false;
+    btn.textContent = '🎵 Enable System Audio Reference';
+    dot('sys', 'red');
+    log('System audio unavailable: ' + (result.reason ?? 'permission denied or unsupported'), 'warn');
+  }
 });
 
 document.getElementById('btn-bypass').addEventListener('click', () => {

@@ -272,6 +272,33 @@ test('H(f) tahmini — bilinen transfer fonksiyonu ile yakınsama', () => {
   assert(maxErr < 0.05, `H(f) yakınsama hatası çok yüksek: ${maxErr.toFixed(4)} (beklenen < 0.05)`);
 });
 
+// ── Reference Signal Merge Test ───────────────────────────────────────────
+console.log('\nReference Merge');
+
+test('Two sources merged — combined power equals sum of individual powers', () => {
+  // Use exact FFT bin frequencies so the two signals are perfectly orthogonal.
+  // Bin spacing = SR/N = 48000/256 = 187.5 Hz → bin 2 = 375 Hz, bin 5 = 937.5 Hz
+  const N  = 256;
+  const SR = 48000;
+  const f1 = 2 * SR / N;  // exact bin 2
+  const f2 = 5 * SR / N;  // exact bin 5
+
+  const bot = Float32Array.from({ length: N }, (_, i) =>
+    0.4 * Math.sin(2 * Math.PI * f1 * i / SR));
+  const sys = Float32Array.from({ length: N }, (_, i) =>
+    0.3 * Math.sin(2 * Math.PI * f2 * i / SR));
+
+  const merged = new Float32Array(N);
+  for (let i = 0; i < N; i++) merged[i] = bot[i] + sys[i];
+
+  const botPow   = bot.reduce((s, v) => s + v * v, 0) / N;
+  const sysPow   = sys.reduce((s, v) => s + v * v, 0) / N;
+  const mergePow = merged.reduce((s, v) => s + v * v, 0) / N;
+
+  assertNear(mergePow, botPow + sysPow, 0.001,
+    `Merged power error: merge=${mergePow.toFixed(4)}, bot+sys=${(botPow + sysPow).toFixed(4)}`);
+});
+
 // ── Sonuç ──────────────────────────────────────────────────────────────────
 console.log(`\n${'─'.repeat(40)}`);
 console.log(`Toplam: ${passed + failed} test | ✓ ${passed} geçti | ✗ ${failed} başarısız`);

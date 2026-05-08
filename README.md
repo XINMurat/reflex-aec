@@ -58,13 +58,30 @@ Microphone input (user voice + bot echo)
       Clean user voice
 ```
 
-**Reference signal routing:** The bot audio is routed directly through the AudioGraph (`AudioBufferSourceNode → AudioWorkletNode input 1`), providing sample-accurate synchronization with no timing jitter.
+**Reference signal routing:**
+```
+Reference Sources
+  ├── Bot audio       (always available)
+  │     AudioBufferSourceNode → BotGainNode → AEC inputs[1]
+  └── System audio loopback   (optional — desktop Chrome/Edge)
+        getDisplayMedia systemAudio → SysGainNode → AEC inputs[1]
+        When active: covers ALL speaker output, not just bot audio
+```
+Both sources are summed at `inputs[1]` by WebAudio automatically — no extra mixing required.
 
 **Background audio guard:** If another app is playing audio (e.g. Spotify), the power ratio detector prevents `H(f)` from learning corrupted data.
 
 ---
 
 ## Browser Support
+
+| Platform | System Audio Loopback | Notes |
+|---|---|---|
+| Chrome / Windows | ✅ | Full support |
+| Chrome / macOS | ⚠️ | Requires screen share permission |
+| Firefox | ❌ | `getDisplayMedia` audio not supported |
+| Safari iOS | ❌ | Not supported |
+| Chrome Android | ❌ | Not supported |
 
 | Browser | AEC Works | Notes |
 |---|---|---|
@@ -132,6 +149,30 @@ Initializes AudioContext and AudioWorklet. Must be called inside a user gesture 
 
 ### `await aec.playBotAudio(audioData: ArrayBuffer): Promise<void>`
 Plays bot audio through the speaker while simultaneously routing the reference signal to the AEC processor via the AudioGraph (sample-accurate). Resolves when playback ends and resets the filter state.
+
+### `await aec.enableSystemAudio(): Promise<{active, reason?}>`
+Captures system audio via `getDisplayMedia` and adds it as a second reference source. Must be called from a user gesture (click handler). Falls back gracefully if the user denies or the browser doesn't support it.
+
+```javascript
+const result = await aec.enableSystemAudio();
+if (result.active) {
+  console.log('System audio loopback active');
+} else {
+  console.warn('Unavailable:', result.reason);
+}
+```
+
+### `aec.getSystemAudioStatus()`
+Returns the current system audio state.
+
+```javascript
+const { supported, active } = aec.getSystemAudioStatus();
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `supported` | `boolean` | `getDisplayMedia` available in this browser |
+| `active` | `boolean` | System audio loopback currently running |
 
 ### `aec.bypass(value: boolean)`
 Toggles bypass mode. When `true`, mic signal passes through unprocessed. Useful for A/B comparison during testing.
