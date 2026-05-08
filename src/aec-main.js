@@ -19,7 +19,8 @@ class ChatbotAEC {
   async init() {
     this.audioCtx = new AudioContext({ sampleRate: 48000 });
 
-    await this.audioCtx.audioWorklet.addModule('aec-processor.js');
+    const processorUrl = new URL('./aec-processor.js', import.meta.url).href;
+    await this.audioCtx.audioWorklet.addModule(processorUrl);
 
     // Mikrofonu aç — tarayıcının kendi AEC'sini KAPAT (biz yapıyoruz)
     // echoCancellation: false çakışmayı önler
@@ -188,4 +189,4 @@ class ChatbotAEC {
 //    edilir → ratioMax varsayılan değer yeterli
 // 3. echoCancellation: false kritik — Safari'nin kendi pipeline'ıyla çakışmaz
 //
-// export default ChatbotAEC;
+export default ChatbotAEC;
