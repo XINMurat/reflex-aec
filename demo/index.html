@@ -145,6 +145,30 @@
       margin-top: 0.75rem;
     }
 
+    #cv-history {
+      height: 160px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 1.2rem;
+      margin-top: 0.5rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
     .canvas-label {
       font-size: 0.7rem;
       color: var(--muted);
@@ -288,9 +312,20 @@
   </div>
 </div>
 
+<!-- History Graph -->
+<div class="card">
+  <h2>Echo Cancellation — Live History (5s)</h2>
+  <canvas id="cv-history"></canvas>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Mic input (echo present)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>AEC output (cleaned)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#22c55e;opacity:0.5"></div>Echo reduction area</div>
+  </div>
+</div>
+
 <!-- Waveforms -->
 <div class="card">
-  <h2>Waveforms</h2>
+  <h2>Current Frame</h2>
   <div class="canvas-label">Microphone input (raw)</div>
   <canvas id="cv-mic"></canvas>
   <div class="canvas-label" style="margin-top:0.75rem">AEC output (cleaned)</div>
@@ -353,8 +388,62 @@ function rmsDb(buf) {
 }
 
 function dbToWidth(db) {
-  // Map -60dB..0dB → 0%..100%
   return Math.max(0, Math.min(100, (db + 60) / 60 * 100)).toFixed(1) + '%';
+}
+
+// ── History graph ──────────────────────────────────────────────────────────
+const HISTORY_LEN = 300; // ~5s at 60fps
+const dbInHist  = new Float32Array(HISTORY_LEN).fill(-80);
+const dbOutHist = new Float32Array(HISTORY_LEN).fill(-80);
+
+function drawHistory(canvas) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const DB_MIN = -60, DB_MAX = 0;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  ctx.lineWidth = 1;
+  for (let db = DB_MIN; db <= DB_MAX; db += 20) {
+    const y = H - (db - DB_MIN) / (DB_MAX - DB_MIN) * H;
+    ctx.strokeStyle = '#252a35';
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.fillStyle = '#64748b';
+    ctx.font = `${Math.round(W * 0.018)}px monospace`;
+    ctx.fillText(db + 'dB', 4, y - 3);
+  }
+
+  // Green fill between input and output (echo reduction area)
+  ctx.beginPath();
+  for (let i = 0; i < HISTORY_LEN; i++) {
+    const x = i / HISTORY_LEN * W;
+    const yIn = H - Math.max(0, Math.min(1, (dbInHist[i] - DB_MIN) / (DB_MAX - DB_MIN))) * H;
+    i === 0 ? ctx.moveTo(x, yIn) : ctx.lineTo(x, yIn);
+  }
+  for (let i = HISTORY_LEN - 1; i >= 0; i--) {
+    const x = i / HISTORY_LEN * W;
+    const yOut = H - Math.max(0, Math.min(1, (dbOutHist[i] - DB_MIN) / (DB_MAX - DB_MIN))) * H;
+    ctx.lineTo(x, yOut);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(34,197,94,0.15)';
+  ctx.fill();
+
+  // Draw lines
+  function line(buf, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < HISTORY_LEN; i++) {
+      const x = i / HISTORY_LEN * W;
+      const y = H - Math.max(0, Math.min(1, (buf[i] - DB_MIN) / (DB_MAX - DB_MIN))) * H;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+  line(dbInHist,  '#ef4444');
+  line(dbOutHist, '#3b82f6');
 }
 
 // ── Canvas waveform ────────────────────────────────────────────────────────
@@ -382,18 +471,19 @@ function sizeCanvas(cv) {
 }
 
 // ── Synthetic test tone (bot simulation) ──────────────────────────────────
-// 300Hz fundamental + harmonics — voice-like spectrum
-function makeBotTone(ctx, durationSec = 2.0) {
+// 300Hz fundamental + harmonics — voice-like spectrum, 5s duration
+// Amplitude ~0.9 so microphone picks it up clearly even at moderate volume
+function makeBotTone(ctx, durationSec = 5.0) {
   const SR = ctx.sampleRate;
   const len = Math.floor(SR * durationSec);
   const buf = ctx.createBuffer(1, len, SR);
   const ch  = buf.getChannelData(0);
   for (let i = 0; i < len; i++) {
     const t = i / SR;
-    ch[i] = 0.35 * Math.sin(2 * Math.PI * 300 * t)
-           + 0.20 * Math.sin(2 * Math.PI * 600 * t)
-           + 0.12 * Math.sin(2 * Math.PI * 900 * t)
-           + 0.07 * Math.sin(2 * Math.PI * 1200 * t);
+    ch[i] = 0.55 * Math.sin(2 * Math.PI * 300  * t)
+           + 0.20 * Math.sin(2 * Math.PI * 600  * t)
+           + 0.10 * Math.sin(2 * Math.PI * 900  * t)
+           + 0.05 * Math.sin(2 * Math.PI * 1200 * t);
   }
   return buf;
 }
@@ -417,9 +507,13 @@ document.getElementById('btn-init').addEventListener('click', async () => {
     aec.micSource.connect(analyserIn);
     aec.aecNode.connect(analyserOut);
 
-    const cvMic = document.getElementById('cv-mic');
-    const cvOut = document.getElementById('cv-out');
+    const cvMic  = document.getElementById('cv-mic');
+    const cvOut  = document.getElementById('cv-out');
+    const cvHist = document.getElementById('cv-history');
     sizeCanvas(cvMic); sizeCanvas(cvOut);
+    const r = window.devicePixelRatio || 1;
+    cvHist.width  = cvHist.offsetWidth * r;
+    cvHist.height = 160 * r;
 
     const bufIn  = new Float32Array(analyserIn.fftSize);
     const bufOut = new Float32Array(analyserOut.fftSize);
@@ -434,12 +528,17 @@ document.getElementById('btn-init').addEventListener('click', async () => {
       const dbOut = rmsDb(bufOut);
       const diff  = dbIn - dbOut;
 
-      document.getElementById('db-in').textContent  = dbIn.toFixed(1)  + ' dB';
-      document.getElementById('db-out').textContent = dbOut.toFixed(1) + ' dB';
+      document.getElementById('db-in').textContent   = dbIn.toFixed(1) + ' dB';
+      document.getElementById('db-out').textContent  = dbOut.toFixed(1) + ' dB';
       document.getElementById('db-diff').textContent = (diff > 0 ? '+' : '') + diff.toFixed(1) + ' dB';
       document.getElementById('bar-in').style.width   = dbToWidth(dbIn);
       document.getElementById('bar-out').style.width  = dbToWidth(dbOut);
       document.getElementById('bar-diff').style.width = Math.max(0, Math.min(100, diff / 30 * 100)).toFixed(1) + '%';
+
+      // Update history and redraw graph
+      dbInHist.copyWithin(0, 1);  dbInHist[HISTORY_LEN - 1]  = dbIn;
+      dbOutHist.copyWithin(0, 1); dbOutHist[HISTORY_LEN - 1] = dbOut;
+      drawHistory(cvHist);
 
       requestAnimationFrame(animate);
     }
@@ -476,7 +575,7 @@ document.getElementById('btn-play').addEventListener('click', async () => {
 
   // Encode to WAV for playBotAudio
   const wav = bufferToWav(rendered);
-  log('Playing 2s test tone through AEC reference pipeline…', 'ok');
+  log('Playing 5s test tone — turn up speakers so mic picks up the echo!', 'ok');
 
   await aec.playBotAudio(wav);
 
