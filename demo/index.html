@@ -176,6 +176,50 @@
       text-align: right;
     }
 
+    /* Level meters */
+    .meter-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .meter-label {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .meter-track {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 0.3rem;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 3px;
+      background: var(--accent);
+      transition: width 0.1s;
+    }
+
+    .meter-fill.green { background: var(--green); }
+    .meter-fill.red   { background: var(--red); }
+
+    .meter-value {
+      font-size: 0.78rem;
+      color: var(--accent2);
+      text-align: right;
+    }
+
+    /* Bypass button active state */
+    button.bypass-active {
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+
     /* Log */
     #log {
       font-size: 0.73rem;
@@ -211,7 +255,36 @@
   <div class="btn-row">
     <button class="primary" id="btn-init">Initialize AEC</button>
     <button id="btn-play" disabled>▶ Play Test Tone (Bot Simulation)</button>
+    <button id="btn-bypass" disabled>AEC: ON</button>
     <button id="btn-reset" disabled>⟳ Reset H(f)</button>
+  </div>
+  <p style="font-size:0.72rem;color:var(--muted);margin-top:0.75rem">
+    Test: Click "Play Test Tone" — the mic will capture the echo.
+    Watch <strong style="color:var(--text)">Input level</strong> rise and
+    <strong style="color:var(--text)">AEC output</strong> stay suppressed.
+    Toggle <strong style="color:var(--text)">AEC: ON/OFF</strong> to A/B compare.
+  </p>
+</div>
+
+<!-- Level Meters -->
+<div class="card">
+  <h2>Level Meters</h2>
+  <div class="meter-grid">
+    <div>
+      <div class="meter-label">Mic input (echo present)</div>
+      <div class="meter-track"><div class="meter-fill red" id="bar-in"></div></div>
+      <div class="meter-value" id="db-in">— dB</div>
+    </div>
+    <div>
+      <div class="meter-label">AEC output (echo removed)</div>
+      <div class="meter-track"><div class="meter-fill" id="bar-out"></div></div>
+      <div class="meter-value" id="db-out">— dB</div>
+    </div>
+    <div>
+      <div class="meter-label">Echo reduction</div>
+      <div class="meter-track"><div class="meter-fill green" id="bar-diff"></div></div>
+      <div class="meter-value" id="db-diff">— dB</div>
+    </div>
   </div>
 </div>
 
@@ -270,6 +343,18 @@ function log(msg, type = '') {
 function dot(id, color) {
   const d = document.getElementById('dot-' + id);
   d.className = 'dot' + (color ? ' ' + color : '');
+}
+
+// ── dB helpers ────────────────────────────────────────────────────────────
+function rmsDb(buf) {
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] ** 2;
+  return 20 * Math.log10(Math.sqrt(sum / buf.length) + 1e-10);
+}
+
+function dbToWidth(db) {
+  // Map -60dB..0dB → 0%..100%
+  return Math.max(0, Math.min(100, (db + 60) / 60 * 100)).toFixed(1) + '%';
 }
 
 // ── Canvas waveform ────────────────────────────────────────────────────────
@@ -344,6 +429,18 @@ document.getElementById('btn-init').addEventListener('click', async () => {
       analyserOut.getFloatTimeDomainData(bufOut);
       drawWave(cvMic, bufIn,  '#64748b');
       drawWave(cvOut, bufOut, '#3b82f6');
+
+      const dbIn  = rmsDb(bufIn);
+      const dbOut = rmsDb(bufOut);
+      const diff  = dbIn - dbOut;
+
+      document.getElementById('db-in').textContent  = dbIn.toFixed(1)  + ' dB';
+      document.getElementById('db-out').textContent = dbOut.toFixed(1) + ' dB';
+      document.getElementById('db-diff').textContent = (diff > 0 ? '+' : '') + diff.toFixed(1) + ' dB';
+      document.getElementById('bar-in').style.width   = dbToWidth(dbIn);
+      document.getElementById('bar-out').style.width  = dbToWidth(dbOut);
+      document.getElementById('bar-diff').style.width = Math.max(0, Math.min(100, diff / 30 * 100)).toFixed(1) + '%';
+
       requestAnimationFrame(animate);
     }
     animate();
@@ -352,9 +449,10 @@ document.getElementById('btn-init').addEventListener('click', async () => {
     dot('mic', 'green');
     log('AEC ready. Sample rate: ' + aec.audioCtx.sampleRate + ' Hz', 'ok');
 
-    document.getElementById('btn-init').disabled = true;
-    document.getElementById('btn-play').disabled = false;
-    document.getElementById('btn-reset').disabled = false;
+    document.getElementById('btn-init').disabled   = true;
+    document.getElementById('btn-play').disabled   = false;
+    document.getElementById('btn-bypass').disabled = false;
+    document.getElementById('btn-reset').disabled  = false;
 
   } catch (e) {
     log('Init failed: ' + e.message, 'err');
@@ -384,6 +482,15 @@ document.getElementById('btn-play').addEventListener('click', async () => {
 
   dot('bot', '');
   log('Bot audio finished. H(f) + NLMS reset.', 'ok');
+});
+
+document.getElementById('btn-bypass').addEventListener('click', () => {
+  if (!aec) return;
+  const btn = document.getElementById('btn-bypass');
+  const active = btn.classList.toggle('bypass-active');
+  aec.bypass(active);
+  btn.textContent = active ? 'AEC: OFF (bypass)' : 'AEC: ON';
+  log(active ? 'Bypass ON — raw mic passthrough' : 'AEC ON — echo cancellation active', 'warn');
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {
