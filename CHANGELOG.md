@@ -6,6 +6,15 @@ Format: [Semantic Versioning](https://semver.org)
 
 ---
 
+## [1.0.2] — 2026-05-08
+
+### Changes
+
+- English error/warning messages in `aec-main.js` (was Turkish)
+- README: added live demo link, npm badges, `bypass()` API docs, updated default parameter values
+
+---
+
 ## [1.0.1] — 2026-05-08
 
 ### Bug fixes

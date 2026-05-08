@@ -1,6 +1,6 @@
 {
   "name": "reflex-aec",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Zero-dependency frequency-domain acoustic echo cancellation for browser voice applications. Cascaded FDAF + NLMS pipeline with Safari iOS support.",
   "main": "src/aec-main.js",
   "type": "module",
