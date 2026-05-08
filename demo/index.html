@@ -149,6 +149,10 @@
       height: 160px;
     }
 
+    #cv-spectrum {
+      height: 160px;
+    }
+
     .legend {
       display: flex;
       gap: 1.2rem;
@@ -348,6 +352,17 @@
   </div>
 </div>
 
+<!-- Frequency Spectrum -->
+<div class="card">
+  <h2>Frequency Spectrum (log scale, 20Hz–8kHz)</h2>
+  <canvas id="cv-spectrum"></canvas>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Mic input (echo present)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>AEC output (cleaned)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#22c55e;opacity:0.5"></div>Cancelled frequencies</div>
+  </div>
+</div>
+
 <!-- History Graph -->
 <div class="card">
   <h2>Echo Cancellation — Live History (5s)</h2>
@@ -425,6 +440,90 @@ function rmsDb(buf) {
 
 function dbToWidth(db) {
   return Math.max(0, Math.min(100, (db + 60) / 60 * 100)).toFixed(1) + '%';
+}
+
+// ── Frequency spectrum (log scale) ────────────────────────────────────────
+function drawSpectrum(canvas, bufIn, bufOut, fftSize, sampleRate) {
+  const ctx   = canvas.getContext('2d');
+  const W     = canvas.width, H = canvas.height;
+  const bins  = fftSize / 2;
+  const SR    = sampleRate;
+
+  const DB_MIN  = -100, DB_MAX = -20;
+  const F_MIN   = 20,   F_MAX  = 8000;
+  const logMin  = Math.log10(F_MIN);
+  const logMax  = Math.log10(F_MAX);
+
+  const freqToX = f => ((Math.log10(Math.max(f, F_MIN)) - logMin) / (logMax - logMin)) * W;
+  const dbToY   = db => H - Math.max(0, Math.min(1, (db - DB_MIN) / (DB_MAX - DB_MIN))) * H;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // ── Frequency grid ────────────────────────────────────────────────────────
+  const freqMarks = [50, 100, 200, 500, 1000, 2000, 4000, 8000];
+  ctx.lineWidth = 1;
+  for (const f of freqMarks) {
+    const x = freqToX(f);
+    ctx.strokeStyle = '#252a35';
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    ctx.fillStyle = '#64748b';
+    ctx.font = `${Math.round(W * 0.016)}px monospace`;
+    const label = f >= 1000 ? (f / 1000) + 'k' : f + '';
+    ctx.fillText(label, x + 2, H - 4);
+  }
+
+  // ── dB grid ───────────────────────────────────────────────────────────────
+  for (let db = DB_MIN; db <= DB_MAX; db += 20) {
+    const y = dbToY(db);
+    ctx.strokeStyle = '#1e2330';
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    if (db > DB_MIN) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = `${Math.round(W * 0.016)}px monospace`;
+      ctx.fillText(db + 'dB', 2, y - 2);
+    }
+  }
+
+  // ── Build x positions for each bin ───────────────────────────────────────
+  // We'll draw only the bins that fall in [F_MIN, F_MAX]
+  const binHz = SR / fftSize;
+
+  function drawLine(buf, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    let first = true;
+    for (let i = 1; i < bins; i++) {
+      const f = i * binHz;
+      if (f < F_MIN || f > F_MAX) continue;
+      const x = freqToX(f);
+      const y = dbToY(buf[i]);
+      if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // ── Green fill: suppression area (where input > output) ───────────────────
+  ctx.beginPath();
+  let first = true;
+  for (let i = 1; i < bins; i++) {
+    const f = i * binHz;
+    if (f < F_MIN || f > F_MAX) continue;
+    const x = freqToX(f);
+    const y = dbToY(bufIn[i]);
+    if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+  }
+  for (let i = bins - 1; i >= 1; i--) {
+    const f = i * binHz;
+    if (f < F_MIN || f > F_MAX) continue;
+    ctx.lineTo(freqToX(f), dbToY(bufOut[i]));
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(34,197,94,0.18)';
+  ctx.fill();
+
+  drawLine(bufIn,  '#ef4444');
+  drawLine(bufOut, '#3b82f6');
 }
 
 // ── History graph ──────────────────────────────────────────────────────────
@@ -543,16 +642,24 @@ document.getElementById('btn-init').addEventListener('click', async () => {
     aec.micSource.connect(analyserIn);
     aec.aecNode.connect(analyserOut);
 
-    const cvMic  = document.getElementById('cv-mic');
-    const cvOut  = document.getElementById('cv-out');
-    const cvHist = document.getElementById('cv-history');
+    analyserIn.fftSize  = analyserOut.fftSize  = 2048;
+    analyserIn.minDecibels  = analyserOut.minDecibels  = -100;
+    analyserIn.maxDecibels  = analyserOut.maxDecibels  = -20;
+    analyserIn.smoothingTimeConstant = analyserOut.smoothingTimeConstant = 0.8;
+
+    const cvMic      = document.getElementById('cv-mic');
+    const cvOut      = document.getElementById('cv-out');
+    const cvHist     = document.getElementById('cv-history');
+    const cvSpectrum = document.getElementById('cv-spectrum');
     sizeCanvas(cvMic); sizeCanvas(cvOut);
     const r = window.devicePixelRatio || 1;
-    cvHist.width  = cvHist.offsetWidth * r;
-    cvHist.height = 160 * r;
+    cvHist.width     = cvHist.offsetWidth     * r;  cvHist.height     = 160 * r;
+    cvSpectrum.width = cvSpectrum.offsetWidth * r;  cvSpectrum.height = 160 * r;
 
-    const bufIn  = new Float32Array(analyserIn.fftSize);
-    const bufOut = new Float32Array(analyserOut.fftSize);
+    const bufIn   = new Float32Array(analyserIn.fftSize);
+    const bufOut  = new Float32Array(analyserOut.fftSize);
+    const freqIn  = new Float32Array(analyserIn.frequencyBinCount);
+    const freqOut = new Float32Array(analyserOut.frequencyBinCount);
 
     function animate() {
       analyserIn.getFloatTimeDomainData(bufIn);
@@ -575,6 +682,11 @@ document.getElementById('btn-init').addEventListener('click', async () => {
       dbInHist.copyWithin(0, 1);  dbInHist[HISTORY_LEN - 1]  = dbIn;
       dbOutHist.copyWithin(0, 1); dbOutHist[HISTORY_LEN - 1] = dbOut;
       drawHistory(cvHist);
+
+      // Frequency spectrum
+      analyserIn.getFloatFrequencyData(freqIn);
+      analyserOut.getFloatFrequencyData(freqOut);
+      drawSpectrum(cvSpectrum, freqIn, freqOut, analyserIn.fftSize, 48000);
 
       requestAnimationFrame(animate);
     }
