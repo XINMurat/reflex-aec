@@ -6,7 +6,26 @@ Format: [Semantic Versioning](https://semver.org)
 
 ---
 
-## [1.0.0] — 2025
+## [1.0.1] — 2026-05-08
+
+### Bug fixes
+
+- **Reference signal now routed via AudioGraph (`inputs[1]`) instead of `postMessage` chunks** — eliminates `setTimeout` timing jitter that was preventing echo cancellation
+- **NLMS weight update restricted to new HOP samples only** — fixes voice attenuation caused by re-processing old OLA frames on every callback
+- ALPHA default `0.92 → 0.85` for faster H(f) convergence
+- Default mu `0.10 → 0.05` for less aggressive NLMS adaptation
+
+### New features
+
+- `aec.bypass(true/false)` — toggle passthrough mode for A/B comparison
+
+### Breaking change
+
+`playBotAudio()` now routes the reference signal through the AudioGraph automatically. The previous `postMessage`-based chunk sending is removed. No API change required — the method signature is unchanged.
+
+---
+
+## [1.0.0] — 2026-05-08
 
 ### Initial release
 
