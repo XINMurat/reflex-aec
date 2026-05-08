@@ -106,7 +106,7 @@ npm install reflex-aec
 
 ```html
 <script type="module">
-  import ChatbotAEC from 'https://cdn.jsdelivr.net/npm/reflex-aec@1.0.1/src/aec-main.js';
+  import ChatbotAEC from 'https://cdn.jsdelivr.net/npm/reflex-aec@1.1.0/src/aec-main.js';
 </script>
 ```
 
@@ -144,8 +144,12 @@ document.getElementById('start-btn').addEventListener('click', async () => {
 ### `new ChatbotAEC()`
 Creates a new AEC instance.
 
-### `await aec.init()`
+### `await aec.init({ requestSystemAudio? })`
 Initializes AudioContext and AudioWorklet. Must be called inside a user gesture event handler.
+
+| Option | Default | Description |
+|---|---|---|
+| `requestSystemAudio` | `false` | If `true`, immediately attempts `getDisplayMedia` system audio capture during init |
 
 ### `await aec.playBotAudio(audioData: ArrayBuffer): Promise<void>`
 Plays bot audio through the speaker while simultaneously routing the reference signal to the AEC processor via the AudioGraph (sample-accurate). Resolves when playback ends and resets the filter state.
